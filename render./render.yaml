@@ -1,0 +1,9 @@
+# render.yaml
+services:
+  - type: web
+    name: mi-bot-discord
+    env: python
+    plan: free
+    pythonVersion: "3.11.9"  # ⚡ ¡FORZAR Python 3.11!
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
