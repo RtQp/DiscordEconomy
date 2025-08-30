@@ -6,6 +6,7 @@ import threading
 import asyncio
 import json
 import os
+import time
 
 # ----------- Configuración del bot de Discord ----------- #
 intents = discord.Intents.default()
@@ -20,63 +21,71 @@ MESSAGE_ID = None
 
 # ----------- Control de actualizaciones ----------- #
 actualizacion_pendiente = False
+ultima_actualizacion = 0
 
 async def limpiar_mensajes_antiguos():
     """Eliminar mensajes antiguos del bot en el canal"""
     try:
         channel = bot.get_channel(CHANNEL_ID)
         if channel:
-            # Obtener todos los mensajes del bot
             async for message in channel.history(limit=100):
                 if message.author == bot.user and message.id != MESSAGE_ID:
                     await message.delete()
-                    await asyncio.sleep(0.5)  # Evitar rate limits
+                    await asyncio.sleep(0.5)
             print("🧹 Mensajes antiguos limpiados")
     except Exception as e:
         print(f"⚠️ Error limpiando mensajes: {e}")
 
 async def actualizar_mensaje(nuevos_datos):
     """Actualiza el mensaje con los nuevos datos de Roblox"""
-    global MESSAGE_ID, actualizacion_pendiente
+    global MESSAGE_ID, actualizacion_pendiente, ultima_actualizacion
 
+    # Verificar si ya hay una actualización en curso
     if actualizacion_pendiente:
+        print("⏸️  Actualización en curso, omitiendo...")
         return
 
     actualizacion_pendiente = True
-    await asyncio.sleep(2)
+    print(f"🔄 Iniciando actualización... {time.time()}")
 
     try:
         channel = bot.get_channel(CHANNEL_ID)
         if channel:
-            # Limpiar mensajes antiguos primero
             await limpiar_mensajes_antiguos()
             
             if MESSAGE_ID:
-                # Intentar editar mensaje existente
                 try:
                     message = await channel.fetch_message(MESSAGE_ID)
                     msg_content = "\n".join(
                         [f"{aldea}: {monedas} $" for aldea, monedas in nuevos_datos.items()]
                     )
                     await message.edit(content=f"📊 Economía de las Aldeas:\n{msg_content}")
-                    print("✏️ Mensaje actualizado con datos de Roblox")
-                    return
-                except:
-                    # Si el mensaje no existe, crear uno nuevo
+                    print("✏️ Mensaje actualizado")
+                    ultima_actualizacion = time.time()
+                except discord.NotFound:
+                    print("❌ Mensaje no encontrado, creando nuevo...")
+                    MESSAGE_ID = None
+                except discord.Forbidden:
+                    print("❌ Sin permisos para editar mensaje")
                     MESSAGE_ID = None
             
-            # Crear nuevo mensaje
-            msg_content = "\n".join(
-                [f"{aldea}: {monedas} $" for aldea, monedas in nuevos_datos.items()]
-            )
-            message = await channel.send(f"📊 Economía de las Aldeas:\n{msg_content}")
-            MESSAGE_ID = message.id
-            print("📝 Nuevo mensaje creado con datos de Roblox")
+            if not MESSAGE_ID:
+                msg_content = "\n".join(
+                    [f"{aldea}: {monedas} $" for aldea, monedas in nuevos_datos.items()]
+                )
+                message = await channel.send(f"📊 Economía de las Aldeas:\n{msg_content}")
+                MESSAGE_ID = message.id
+                print("📝 Nuevo mensaje creado")
+                ultima_actualizacion = time.time()
             
     except Exception as e:
         print(f"⚠️ Error al actualizar mensaje: {e}")
-
+        import traceback
+        traceback.print_exc()
+    
+    # ⚠️ IMPORTANTE: Siempre resetear la bandera
     actualizacion_pendiente = False
+    print("✅ Actualización completada")
 
 # ----------- Flask para recibir datos desde Roblox ----------- #
 app = Flask(__name__)
@@ -87,25 +96,39 @@ def actualizar_economia():
     try:
         data = request.json
         
-        # Verificar que los datos tienen el formato esperado
         if not isinstance(data, dict):
             return {"status": "error", "mensaje": "Datos deben ser un objeto JSON"}, 400
         
         print(f"📨 Datos recibidos de Roblox: {data}")
         
-        # Actualizar el mensaje en Discord con los datos de Roblox
-        bot.loop.create_task(actualizar_mensaje(data))
+        # Crear task para actualizar sin bloquear
+        asyncio.run_coroutine_threadsafe(actualizar_mensaje(data), bot.loop)
         
         return {"status": "ok", "mensaje": "Economía actualizada en Discord"}
         
     except Exception as e:
-        print(f"❌ Error procesando datos de Roblox: {e}")
+        print(f"❌ Error procesando datos: {e}")
         return {"status": "error", "mensaje": str(e)}, 500
 
 @app.route("/health", methods=["GET"])
 def health_check():
     """Endpoint para health checks"""
-    return {"status": "ok", "bot_online": bot.is_ready()}
+    return {
+        "status": "ok", 
+        "bot_online": bot.is_ready(),
+        "ultima_actualizacion": ultima_actualizacion,
+        "actualizacion_pendiente": actualizacion_pendiente
+    }
+
+@app.route("/status", methods=["GET"])
+def status_info():
+    """Info de estado del bot"""
+    return {
+        "bot_ready": bot.is_ready(),
+        "message_id": MESSAGE_ID,
+        "hora_actual": time.time(),
+        "ultima_actualizacion": ultima_actualizacion
+    }
 
 def run_flask():
     port = int(os.environ.get("PORT", 10000))
@@ -123,10 +146,8 @@ async def on_ready():
     print(f'✅ Conectado como {bot.user}')
     global MESSAGE_ID
     
-    # Limpiar mensajes antiguos al iniciar
     await limpiar_mensajes_antiguos()
     
-    # Mensaje inicial vacío
     channel = bot.get_channel(CHANNEL_ID)
     if channel:
         message = await channel.send("📊 Esperando datos de Roblox...")
@@ -140,4 +161,10 @@ if __name__ == "__main__":
         exit(1)
     
     threading.Thread(target=run_flask, daemon=True).start()
-    bot.run(TOKEN)
+    
+    try:
+        bot.run(TOKEN)
+    except Exception as e:
+        print(f"❌ Error fatal del bot: {e}")
+        import traceback
+        traceback.print_exc()
