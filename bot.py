@@ -1,5 +1,5 @@
-import discord
-from discord.ext import commands
+import disnake as discord  # ✅ Cambiado aquí
+from disnake.ext import commands  # ✅ Cambiado aquí
 from flask import Flask, request
 import threading
 import asyncio
