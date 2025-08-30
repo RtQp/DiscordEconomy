@@ -85,7 +85,8 @@ def sumar():
     return {"status": "error", "mensaje": "Aldea no encontrada"}, 400
 
 def run_flask():
-    app.run(host="0.0.0.0", port=8080)
+    port = int(os.environ.get("PORT", 10000))  # ✅ Puerto de Render
+    app.run(host="0.0.0.0", port=port)
 
 # ----------- Eventos del bot ----------- #
 @bot.event
