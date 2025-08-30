@@ -1,11 +1,15 @@
-import disnake as discord  # ✅ Cambiado aquí
-from disnake.ext import commands  # ✅ Cambiado aquí
+# ⚠️ AÑADE ESTO AL PRINCIPIO ABSOLUTO
+import os
+os.environ["DISCORD_VOICE"] = "false"  # ⚡ Desactiva módulos de voz
+
+# ✅ TODO LO DEMÁS QUEDA EXACTAMENTE IGUAL
+import discord
+from discord.ext import commands
 from flask import Flask, request
 import threading
 import asyncio
 import json
 import os
-
 # ----------- Configuración del bot de Discord ----------- #
 intents = discord.Intents.default()
 intents.messages = True
