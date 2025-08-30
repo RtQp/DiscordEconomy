@@ -1,8 +1,4 @@
-# ⚠️ AÑADE ESTO AL PRINCIPIO ABSOLUTO
-import os
-os.environ["DISCORD_VOICE"] = "false"  # ⚡ Desactiva módulos de voz
-
-# ✅ TODO LO DEMÁS QUEDA EXACTAMENTE IGUAL
+# ✅ SOLO ESTOS IMPORTS NORMALES
 import discord
 from discord.ext import commands
 from flask import Flask, request
